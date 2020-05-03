@@ -275,7 +275,7 @@ int parmake(int argc, char **argv) {
   /*for(j=0;j<Vector_size(circular);j++) {
     printf("the target in circular is %s\n",((rule_t*)Vector_get(circular, j))->target);
   }*/
-  int i=0;
+  // int i=0;
   int * id = malloc(numthreads* sizeof(int));
 
   
