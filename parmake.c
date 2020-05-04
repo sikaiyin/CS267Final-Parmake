@@ -10,6 +10,7 @@
 #include "queue.h"
 #include "set.h"
 
+
 set *cycled_set;
 set *task_set;
 vector *task_vector;
@@ -21,8 +22,8 @@ int new_changes_in_dependencies;
 omp_lock_t *m;
 omp_lock_t *n;
 
-pthread_cond_t cv;
-pthread_cond_t cu;
+//pthread_cond_t cv;
+//pthread_cond_t cu;
 
 // return value: 1 means cycle detected, 0 means no cycle detected
 int detect_cycle(char *curr_target) {
@@ -62,7 +63,7 @@ void change_antineighbor_data(char *curr_target) {
         curr_antineighbor_rule->data = (void *)(((size_t)(curr_antineighbor_rule->data)) - 1);
     }
     new_changes_in_dependencies = 1;
-    pthread_cond_broadcast(&cu);
+    //pthread_cond_broadcast(&cu);
     omp_unset_lock(&n[0]);
     vector_destroy(curr_antineighbors);
     free(curr_target);
@@ -101,7 +102,7 @@ void *run_makefile(void *ptr) {
                     new_changes_in_dependencies = 0;
                 }
             }
-            while (!new_changes_in_dependencies) pthread_cond_wait(&cu, &n[0]);
+            //while (!new_changes_in_dependencies) pthread_cond_wait(&cu, &n[0]);
             omp_unset_lock(&n[0]);
         }
 
@@ -131,7 +132,7 @@ void *run_makefile(void *ptr) {
 
                 rule_t *next_rule = (rule_t *)graph_get_vertex_value(file_graph, next_target);
                 omp_set_lock(&m[0]);
-                while (next_rule->state == 0) pthread_cond_wait(&cv, &m[0]);
+                //while (next_rule->state == 0) pthread_cond_wait(&cv, &m[0]);
                 if (next_rule->state == -1) any_dependencies_failed = 1;
                 omp_unset_lock(&m[0]);
             }
@@ -150,7 +151,7 @@ void *run_makefile(void *ptr) {
         if (any_dependencies_failed) {
             omp_set_lock(&m[0]);
             curr_rule->state = -1;
-            pthread_cond_broadcast(&cv);
+            //pthread_cond_broadcast(&cv);
             omp_unset_lock(&m[0]);
 
             change_antineighbor_data(curr_target);
@@ -161,7 +162,7 @@ void *run_makefile(void *ptr) {
             if (!have_non_file_dependencies && !have_newer_file_dependencies) {
                 omp_set_lock(&m[0]);
                 curr_rule->state = 1;
-                pthread_cond_broadcast(&cv);
+                //pthread_cond_broadcast(&cv);
                 omp_unset_lock(&m[0]);
 
                 change_antineighbor_data(curr_target);
@@ -180,13 +181,13 @@ void *run_makefile(void *ptr) {
         if (any_commands_failed) {
             omp_set_lock(&m[0]);
             curr_rule->state = -1;
-            pthread_cond_broadcast(&cv);
+            //pthread_cond_broadcast(&cv);
             omp_unset_lock(&m[0]);
         }
         else {
             omp_set_lock(&m[0]);
             curr_rule->state = 1;
-            pthread_cond_broadcast(&cv);
+            //pthread_cond_broadcast(&cv);
             omp_unset_lock(&m[0]);
         }
         change_antineighbor_data(curr_target);
@@ -202,24 +203,31 @@ void parallel_makefile(size_t num_threads) {
     n = (omp_lock_t *) malloc(1 * sizeof(omp_lock_t));
     omp_init_lock(&m[0]);
     omp_init_lock(&n[0]);
-    pthread_cond_init(&cv, NULL);
-    pthread_cond_init(&cu, NULL);
+    //pthread_cond_init(&cv, NULL);
+    //pthread_cond_init(&cu, NULL);
 
-    pthread_t pthread_id[num_threads];
-    for (size_t i = 0; i < num_threads; i++) {
-        pthread_id[i] = i;
-        pthread_create(&pthread_id[i], NULL, run_makefile, NULL);
-    }
+    //pthread_t pthread_id[num_threads];
+    //for (size_t i = 0; i < num_threads; i++) {
+    //    pthread_id[i] = i;
+    //    pthread_create(&pthread_id[i], NULL, run_makefile, NULL);
+    //}
 
-    void *result[num_threads];
-    for (size_t i = 0; i < num_threads; i++) {
-        pthread_join(pthread_id[i], &result[i]);
-    }
+    //void *result[num_threads];
+    //for (size_t i = 0; i < num_threads; i++) {
+    //    pthread_join(pthread_id[i], &result[i]);
+    //}
 
-    // pthread_mutex_destroy(&m);
-    // pthread_mutex_destroy(&n);
-    pthread_cond_destroy(&cv);
-    pthread_cond_destroy(&cu);
+#ifdef _OPENMP
+#pragma omp parallel default(shared)
+#endif
+{
+    run_makefile;
+}
+
+// pthread_mutex_destroy(&m);
+// pthread_mutex_destroy(&n);
+//pthread_cond_destroy(&cv);
+//pthread_cond_destroy(&cu);
 }
 
 int parmake(char *makefile, size_t num_threads, char **targets) {
