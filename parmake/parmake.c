@@ -46,12 +46,12 @@ void parsed_new_target(rule_t* t) {
 void * thread_function() {
   //*(int*)id = 1;
   while(1) {
-    pthread_mutex_lock(&m[0]);
+    omp_set_lock(&m[0]);
     if(targetcount<=0) {
-      pthread_mutex_unlock(&m[0]);
+      omp_unset_lock(&m[0]);
       break;
     }
-    pthread_mutex_unlock(&m[0]);
+    omp_unset_lock(&m[0]);
     rule_t * r = (rule_t*)queue_pull(ruleq);
     size_t y = 0;
     int shouldreturn = 0;
@@ -66,20 +66,20 @@ void * thread_function() {
     }
     else if(shouldreturn == 1) {
       r->state = -1;
-      pthread_mutex_lock(&m[0]);
+      omp_set_lock(&m[0]);
       queue_push(ruleq, (void*)r);
       targetcount--;
-      pthread_mutex_unlock(&m[0]);
+      omp_unset_lock(&m[0]);
     }
     else {
       if(Vector_size(r->dependencies)==0) {
         Vector* temp = r->commands;
 	      if(access(r->target,F_OK)==0) {
 	        r->state = 1;
-          pthread_mutex_lock(&m[0]);
+          omp_set_lock(&m[0]);
           queue_push(ruleq, (void*)r);
           targetcount--;
-          pthread_mutex_unlock(&m[0]);
+          omp_unset_lock(&m[0]);
         }
 	      else {
           size_t ts = Vector_size(temp);
@@ -95,17 +95,17 @@ void * thread_function() {
           }
           if(ret!=0) {
 	          r->state = -1;
-            pthread_mutex_lock(&m[0]);
+            omp_set_lock(&m[0]);
             queue_push(ruleq, (void*)r);
             targetcount--;
-            pthread_mutex_unlock(&m[0]);
+            omp_unset_lock(&m[0]);
           }
           else {
 	          r->state = 1;
-            pthread_mutex_lock(&m[0]);
+            omp_set_lock(&m[0]);
             queue_push(ruleq, (void*)r);
 	          targetcount--;
-            pthread_mutex_unlock(&m[0]);
+            omp_unset_lock(&m[0]);
           }
         }
       }
@@ -116,18 +116,18 @@ void * thread_function() {
         for(i=0;i<Vector_size(r->dependencies);i++) {
 	        if(((rule_t*)Vector_get(r->dependencies,i))->state==-1) {
 	          r->state = -1;
-            pthread_mutex_lock(&m[0]);
+            omp_set_lock(&m[0]);
             queue_push(ruleq, (void*)r);
 	          targetcount--;
 	          invalid = 1;
-            pthread_mutex_unlock(&m[0]);
+            omp_unset_lock(&m[0]);
             break;
 	        }
 	        if(Vector_get(r->dependencies,i)!=NULL && ((rule_t*)Vector_get(r->dependencies,i))->state==0) {
 	          invalid = 1;
-            pthread_mutex_lock(&m[0]);
+            omp_set_lock(&m[0]);
             queue_push(ruleq, (void*)r);//push back the rule since dependencies
-            pthread_mutex_unlock(&m[0]);
+            omp_unset_lock(&m[0]);
             break;
 	        }
         }
@@ -155,10 +155,10 @@ void * thread_function() {
             }
 	          if(needrun==0) {
 	            r->state = 1;
-              pthread_mutex_lock(&m[0]);
+              omp_set_lock(&m[0]);
               queue_push(ruleq, (void*)r);
               targetcount--;
-              pthread_mutex_unlock(&m[0]);
+              omp_unset_lock(&m[0]);
             }
 	        }
 	        if(access(r->target,F_OK)!=0 || needrun == 1) {
@@ -175,17 +175,17 @@ void * thread_function() {
             }
 	          if(ret!=0) {
 	            r->state = -1;
-              pthread_mutex_lock(&m[0]);
+              omp_set_lock(&m[0]);
               queue_push(ruleq, (void*)r);
 	            targetcount--;
-              pthread_mutex_unlock(&m[0]);
+              omp_unset_lock(&m[0]);
             }
 	          else {
 	            r->state = 1;
-              pthread_mutex_lock(&m[0]);
+              omp_set_lock(&m[0]);
               queue_push(ruleq, (void*)r);
 	            targetcount--;
-              pthread_mutex_unlock(&m[0]);
+              omp_unset_lock(&m[0]);
             }
           }
         }
