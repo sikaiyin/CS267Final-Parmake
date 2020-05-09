@@ -14,7 +14,7 @@
 #include "parser.h"
 #include "queue.h"
 #include "vector.h"
-#include <pthread.h>
+// #include <pthread.h>
 #include "rule.h"
 
 int targetcount = 0;
@@ -243,7 +243,7 @@ int parmake(int argc, char **argv) {
   v = Vector_create(mycopy, mydes);
   circular = Vector_create(mycopy, mydes);
   char ** targets = argv+optind;
-  pthread_t p[numthreads];
+  //pthread_t p[numthreads];
   ruleq = queue_create(-1, mycopy, mydes);
   if(targets==NULL) {
     parser_parse_makefile(fvalue,NULL,parsed_new_target);
@@ -277,8 +277,8 @@ int parmake(int argc, char **argv) {
   /*for(j=0;j<Vector_size(circular);j++) {
     printf("the target in circular is %s\n",((rule_t*)Vector_get(circular, j))->target);
   }*/
-  int i=0;
-  int * id = malloc(numthreads* sizeof(int));
+  //int i=0;
+  //int * id = malloc(numthreads* sizeof(int));
   m = (omp_lock_t *)malloc(1 * sizeof(omp_lock_t));
   omp_init_lock(&m[0]);
 
