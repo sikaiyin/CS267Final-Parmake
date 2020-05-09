@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <omp.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "parmake.h"
@@ -17,7 +18,7 @@
 #include "rule.h"
 
 int targetcount = 0;
-pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+omp_lock_t *m;
 
 Vector * v;
 Vector * circular;
@@ -42,8 +43,8 @@ void parsed_new_target(rule_t* t) {
   return;
 }
 
-void * thread_function(void * id) {
-  *(int*)id = 1;
+void * thread_function() {
+  //*(int*)id = 1;
   while(1) {
     pthread_mutex_lock(&m);
     if(targetcount<=0) {
@@ -73,67 +74,68 @@ void * thread_function(void * id) {
     else {
       if(Vector_size(r->dependencies)==0) {
         Vector* temp = r->commands;
-	if(access(r->target,F_OK)==0) {
-	  r->state = 1;
+	      if(access(r->target,F_OK)==0) {
+	        r->state = 1;
           pthread_mutex_lock(&m);
           queue_push(ruleq, (void*)r);
           targetcount--;
           pthread_mutex_unlock(&m);
-	}
-	else {
+	      }
+	      else {
           size_t ts = Vector_size(temp);
           size_t i=0;
           int ret = 0;
           for(i=0;i<ts;i++) {
             if(Vector_get(temp, i)!=NULL) {
-	      ret = system(Vector_get(temp, i));
-	      if(ret!=0) {
-	        break;
-	      }
+	            ret = system(Vector_get(temp, i));
+	            if(ret!=0) {
+	              break;
+	            }
             }
           }
           if(ret!=0) {
-	    r->state = -1;
-	    pthread_mutex_lock(&m);
-	    queue_push(ruleq, (void*)r);
+	          r->state = -1;
+	          pthread_mutex_lock(&m);
+	          queue_push(ruleq, (void*)r);
             targetcount--;
             pthread_mutex_unlock(&m);
           }
           else {
-	    r->state = 1;
-	    pthread_mutex_lock(&m);
-	    queue_push(ruleq, (void*)r);
-	    targetcount--;
-	    pthread_mutex_unlock(&m);
+	          r->state = 1;
+	          pthread_mutex_lock(&m);
+	          queue_push(ruleq, (void*)r);
+	          targetcount--;
+	          pthread_mutex_unlock(&m);
           }
         }
       }
+
       else {
         size_t i=0;
         int invalid = 0;
         for(i=0;i<Vector_size(r->dependencies);i++) {
-	  if(((rule_t*)Vector_get(r->dependencies,i))->state==-1) {
-	    r->state = -1;
-	    pthread_mutex_lock(&m);
-	    queue_push(ruleq, (void*)r);
-	    targetcount--;
-	    invalid = 1;
-	    pthread_mutex_unlock(&m);
-	    break;
-	  }
-	  if(Vector_get(r->dependencies,i)!=NULL && ((rule_t*)Vector_get(r->dependencies,i))->state==0) {
-	    invalid = 1;
-	    pthread_mutex_lock(&m);
-	    queue_push(ruleq, (void*)r);//push back the rule since dependencies
-	    pthread_mutex_unlock(&m);
-	    break;
-	  }
+	        if(((rule_t*)Vector_get(r->dependencies,i))->state==-1) {
+	          r->state = -1;
+	          pthread_mutex_lock(&m);
+	          queue_push(ruleq, (void*)r);
+	          targetcount--;
+	          invalid = 1;
+	          pthread_mutex_unlock(&m);
+	          break;
+	        }
+	        if(Vector_get(r->dependencies,i)!=NULL && ((rule_t*)Vector_get(r->dependencies,i))->state==0) {
+	          invalid = 1;
+	          pthread_mutex_lock(&m);
+	          queue_push(ruleq, (void*)r);//push back the rule since dependencies
+	          pthread_mutex_unlock(&m);
+	          break;
+	        }
         }
 
         if(invalid==0) {
-	  Vector* temp = r->commands;
-	  int needrun = 0;
-	  if(access(r->target,F_OK)==0) {
+	        Vector* temp = r->commands;
+	        int needrun = 0;
+	        if(access(r->target,F_OK)==0) {
             struct stat s;
             struct stat a;
             stat(r->target, &a);
@@ -141,50 +143,50 @@ void * thread_function(void * id) {
             for(i=0;i<Vector_size(r->dependencies);i++) {
               rule_t * tt = (rule_t*)Vector_get(r->dependencies,i);
               stat(tt->target, &s);
-	      int dependaccess = access(tt->target,F_OK);
+	            int dependaccess = access(tt->target,F_OK);
               if(s.st_mtime - a.st_mtime > 0) {
                 needrun = 1;
                 break;
               }
-	      if(dependaccess!=0) {
-		needrun = 1;
-		break;
-	      }
+	            if(dependaccess!=0) {
+		            needrun = 1;
+		            break;
+	            }
             }
-	    if(needrun==0) {
-	      r->state = 1;
+	          if(needrun==0) {
+	            r->state = 1;
               pthread_mutex_lock(&m);
               queue_push(ruleq, (void*)r);
               targetcount--;
               pthread_mutex_unlock(&m);
-	    }
-	  }
-	  if(access(r->target,F_OK)!=0 || needrun == 1) {
-	    size_t ts = Vector_size(temp);
-	    size_t i=0;
-	    int ret = 0;
-	    for(i=0;i<ts;i++) {
-	      if(Vector_get(temp, i)!=NULL) {
-	        ret = system(Vector_get(temp, i));
-	        if(ret!=0) {
-	          break;
+	          }
 	        }
-	      }
+	        if(access(r->target,F_OK)!=0 || needrun == 1) {
+	          size_t ts = Vector_size(temp);
+	          size_t i=0;
+	          int ret = 0;
+	          for(i=0;i<ts;i++) {
+	            if(Vector_get(temp, i)!=NULL) {
+	              ret = system(Vector_get(temp, i));
+	              if(ret!=0) {
+	                break;
+	              }
+	            }
             }
-	    if(ret!=0) {
-	      r->state = -1;
-	      pthread_mutex_lock(&m);
-	      queue_push(ruleq, (void*)r);
-	      targetcount--;
-	      pthread_mutex_unlock(&m);
-	    }
-	    else {
-	      r->state = 1;
-	      pthread_mutex_lock(&m);
-	      queue_push(ruleq, (void*)r);
-	      targetcount--;
-	      pthread_mutex_unlock(&m);
-	    }
+	          if(ret!=0) {
+	            r->state = -1;
+	            pthread_mutex_lock(&m);
+	            queue_push(ruleq, (void*)r);
+	            targetcount--;
+	            pthread_mutex_unlock(&m);
+	          }
+	          else {
+	            r->state = 1;
+	            pthread_mutex_lock(&m);
+	            queue_push(ruleq, (void*)r);
+	            targetcount--;
+	            pthread_mutex_unlock(&m);
+	          }
           }
         }
       }
@@ -205,10 +207,10 @@ int parmake(int argc, char **argv) {
         break;
       case 'j':
         jvalue = optarg;
-	numthreads = atoi(jvalue);
+	      numthreads = atoi(jvalue);
         break;
       default:
-	break;
+	      break;
     }
   }
   FILE * f;
@@ -277,17 +279,23 @@ int parmake(int argc, char **argv) {
   }*/
   int i=0;
   int * id = malloc(numthreads* sizeof(int));
+  m = (omp_lock_t *)malloc(1 * sizeof(omp_lock_t));
+  omp_init_lock(&m[0]);
 
-  
-  for(i=0;i<numthreads;i++) {
-    id[i] = i+1;
-    pthread_create(&p[i], NULL, thread_function, (void*)&id[i]);
+//  for(i=0;i<numthreads;i++) {
+//    id[i] = i+1;
+//    pthread_create(&p[i], NULL, thread_function, (void*)&id[i]);
+//  }
+#ifdef _OPENMP
+#pragma omp parallel default(shared)
+#endif
+  {
+    thread_function();
   }
-
-  for(i=0;i<numthreads;i++) {
-    pthread_join(p[i],NULL);
-  }
+  //  for(i=0;i<numthreads;i++) {
+  //    pthread_join(p[i],NULL);
+  //  }
   queue_destroy(ruleq);
-  free(id);
+//  free(id);
   return 0;
 }
